@@ -1,13 +1,114 @@
-from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
-                            QHBoxLayout, QLabel, QListWidget, QTextEdit,
-                            QPushButton, QListWidgetItem, QMessageBox, QFrame,
-                            QSplitter)
-from PyQt6.QtCore import Qt, QTimer, QDateTime, QThread
-from PyQt6.QtGui import QCursor
+from PyQt6.QtWidgets import (
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
+    QListWidget, QTextEdit, QPushButton, QListWidgetItem, QMessageBox,
+    QFrame, QSplitter, QStyledItemDelegate, QStyle
+)
+from PyQt6.QtCore import Qt, QTimer, QDateTime, QThread, QSize, QRect
+from PyQt6.QtGui import QCursor, QPainter, QFont, QColor, QIcon
 from email_handler import EmailHandler
 from compose_dialog import ComposeDialog
 from search_filter_widget import CompactSearchWidget
 from email_worker import EmailWorker
+
+
+class EmailItemDelegate(QStyledItemDelegate):
+    """Custom delegate for rendering email list items with proper formatting"""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        
+    def paint(self, painter, option, index):
+        # Get the email data from the item
+        email_data = index.data(Qt.ItemDataRole.UserRole)
+        if not email_data:
+            super().paint(painter, option, index)
+            return
+            
+        # Draw the selection background if selected
+        if option.state & QStyle.StateFlag.State_Selected:
+            painter.fillRect(option.rect, QColor("#e1f0ff"))
+            # Draw a left border for selected items
+            painter.fillRect(
+                QRect(option.rect.left(), option.rect.top(), 3, option.rect.height()),
+                QColor("#0078d4")
+            )
+        elif option.state & QStyle.StateFlag.State_MouseOver:
+            # Highlight on hover
+            painter.fillRect(option.rect, QColor("#f5f5f5"))
+        else:
+            painter.fillRect(option.rect, QColor("white"))
+            
+        # Draw bottom border
+        painter.setPen(QColor("#ccc"))
+        painter.drawLine(
+            option.rect.left(), option.rect.bottom(),
+            option.rect.right(), option.rect.bottom()
+        )
+            
+        # Set up the painter
+        painter.save()
+        
+        # Calculate text rectangles with proper margins
+        margin = 12
+        rect = option.rect.adjusted(margin, margin, -margin, -margin)
+        
+        # Draw sender name (bold)
+        font = painter.font()
+        font.setBold(True)
+        font.setPointSize(10)
+        painter.setFont(font)
+        painter.setPen(QColor("#000"))
+        sender_rect = QRect(rect.left(), rect.top(), rect.width(), 20)
+        painter.drawText(
+            sender_rect, Qt.AlignmentFlag.AlignLeft, email_data['from']
+        )
+        
+        # Draw subject (normal)
+        font.setBold(False)
+        font.setPointSize(9)
+        painter.setFont(font)
+        subject_rect = QRect(
+            rect.left(), sender_rect.bottom() + 6, rect.width(), 20
+        )
+        painter.drawText(
+            subject_rect, Qt.AlignmentFlag.AlignLeft, email_data['subject']
+        )
+        
+        # Draw date (gray) - use consistent format
+        formatted_date = "Date not available"
+        try:
+            if 'date' in email_data and email_data['date']:
+                date_str = email_data['date']
+                
+                # Parse date using the helper function
+                date = parse_date(date_str)
+                
+                # Format date consistently
+                if date.isValid():
+                    # Use a consistent format for all dates
+                    formatted_date = date.toString('MM/dd/yyyy hh:mm AP')
+                else:
+                    # Just use the raw date string as fallback
+                    formatted_date = date_str
+            else:
+                print("Date field missing in email data")
+        except Exception as e:
+            print(f"Error formatting date: {str(e)}")
+            
+        font.setPointSize(8)
+        painter.setFont(font)
+        painter.setPen(QColor("#666"))
+        date_rect = QRect(
+            rect.left(), subject_rect.bottom() + 6, rect.width(), 20
+        )
+        painter.drawText(
+            date_rect, Qt.AlignmentFlag.AlignLeft, formatted_date
+        )
+        
+        painter.restore()
+    
+    def sizeHint(self, option, index):
+        # Return a size that accommodates three lines of text plus margins
+        return QSize(option.rect.width(), 90)
 
 
 class EmailListItem(QListWidgetItem):
@@ -17,20 +118,12 @@ class EmailListItem(QListWidgetItem):
         self.update_display()
         
     def update_display(self):
-        date = QDateTime.fromString(
-            self.email_data['date'],
-            Qt.DateFormat.TextDate
-        )
-        formatted_date = date.toString('MM/dd/yyyy hh:mm AP')
-        
-        # Create a display with bold sender name
-        display_text = (
-            f"<b>{self.email_data['from']}</b>\n"
-            f"{self.email_data['subject']}\n"
-            f"{formatted_date}"
-        )
-        self.setText(display_text)
-        self.setTextAlignment(Qt.AlignmentFlag.AlignLeft)
+        # Store the email data in the UserRole
+        self.setData(Qt.ItemDataRole.UserRole, self.email_data)
+        # Set a placeholder text (won't be displayed with our custom delegate)
+        self.setText(self.email_data['subject'])
+        # Set a fixed height for the item
+        self.setSizeHint(QSize(0, 90))
 
 
 class EmailWindow(QMainWindow):
@@ -47,7 +140,9 @@ class EmailWindow(QMainWindow):
         self.thread = None
         
         print("[EmailWindow.__init__] Setting window properties")
-        self.setWindowTitle(f"Email Client - {email}")
+        self.setWindowTitle(f"Mail Buddy - {email}")
+        # Set window icon to bear emoji
+        self.setWindowIcon(QIcon("icon.png"))
         self.setMinimumSize(1000, 700)
         
         # Create central widget and main layout
@@ -157,6 +252,25 @@ class EmailWindow(QMainWindow):
             return
             
         print("[EmailWindow.handle_emails_fetched] UI ready, processing emails")
+        
+        # Sort emails by date (newest first)
+        try:
+            # Convert string dates to QDateTime objects for sorting
+            for email in emails:
+                if 'date' in email and email['date']:
+                    date_str = email['date']
+                    date = parse_date(date_str)
+                    # Store the parsed date for sorting
+                    email['parsed_date'] = date
+                else:
+                    # If no date, use epoch start (will appear at the end)
+                    email['parsed_date'] = QDateTime.fromSecsSinceEpoch(0)
+            
+            # Sort emails by parsed_date in descending order (newest first)
+            emails.sort(key=lambda x: x['parsed_date'].toSecsSinceEpoch(), reverse=True)
+        except Exception as e:
+            print(f"[EmailWindow.handle_emails_fetched] Error sorting emails: {str(e)}")
+        
         self.emails = emails
         self.filtered_emails = emails.copy()  # Store a copy for filtering
         self.statusBar().showMessage(f"Last updated: {QDateTime.currentDateTime().toString()}")
@@ -322,14 +436,26 @@ class EmailWindow(QMainWindow):
                     border-radius: 4px;
                 }
                 QListWidget::item {
-                    padding: 10px;
-                    border-bottom: 1px solid #eee;
+                    border-bottom: 1px solid #ccc;
+                    padding-top: 4px;
+                    padding-bottom: 4px;
+                    margin: 0px;
+                }
+                QListWidget::item:last-child {
+                    border-bottom: none;
                 }
                 QListWidget::item:selected {
                     background-color: #e1f0ff;
                     color: black;
+                    border-left: 3px solid #0078d4;
+                }
+                QListWidget::item:hover:!selected {
+                    background-color: #f5f5f5;
                 }
             """)
+            
+            # Set custom delegate for rendering items
+            self.email_list.setItemDelegate(EmailItemDelegate(self.email_list))
             
             list_layout.addWidget(compose_button)
             list_layout.addWidget(self.email_list)
@@ -391,31 +517,99 @@ class EmailWindow(QMainWindow):
                     background-color: white;
                     border: 1px solid #ddd;
                     border-radius: 4px;
-                    padding: 10px;
                     margin-bottom: 10px;
                 }
                 QLabel {
                     color: #444;
                     font-size: 13px;
-                    padding: 5px 0;
                 }
-                QLabel#subject_label, QLabel#from_label, QLabel#to_label, QLabel#date_label {
+                QLabel.header_label {
+                    font-weight: bold;
+                    color: #666;
+                    min-width: 60px;
+                    max-width: 60px;
+                }
+                QLabel.value_label {
                     font-weight: normal;
                 }
-                QLabel#from_label {
+                QLabel#from_value {
                     font-weight: bold;
                 }
             """)
             header_layout = QVBoxLayout(header_widget)
             header_layout.setSpacing(5)
+            header_layout.setContentsMargins(10, 10, 10, 10)
             
-            # Create labels
-            self.email_labels = {}
-            for key in ['subject', 'from', 'to', 'date']:
-                label = QLabel("")
-                label.setObjectName(f"{key}_label")
-                header_layout.addWidget(label)
-                self.email_labels[key] = label
+            # Create rows for each field with label and value
+            self.email_values = {}
+            
+            # From field
+            from_row = QHBoxLayout()
+            from_row.setSpacing(5)
+            from_label = QLabel("From:")
+            from_label.setObjectName("from_label")
+            from_label.setProperty("class", "header_label")
+            from_value = QLabel("")
+            from_value.setObjectName("from_value")
+            from_value.setProperty("class", "value_label")
+            from_value.setWordWrap(True)
+            from_row.addWidget(from_label)
+            from_row.addWidget(from_value, 1)  # Give the value label stretch factor of 1
+            header_layout.addLayout(from_row)
+            self.email_values['from'] = from_value
+            
+            # To field
+            to_row = QHBoxLayout()
+            to_row.setSpacing(5)
+            to_label = QLabel("To:")
+            to_label.setObjectName("to_label")
+            to_label.setProperty("class", "header_label")
+            to_value = QLabel("")
+            to_value.setObjectName("to_value")
+            to_value.setProperty("class", "value_label")
+            to_value.setWordWrap(True)
+            to_row.addWidget(to_label)
+            to_row.addWidget(to_value, 1)  # Give the value label stretch factor of 1
+            header_layout.addLayout(to_row)
+            self.email_values['to'] = to_value
+            
+            # Subject field
+            subject_row = QHBoxLayout()
+            subject_row.setSpacing(5)
+            subject_label = QLabel("Subject:")
+            subject_label.setObjectName("subject_label")
+            subject_label.setProperty("class", "header_label")
+            subject_value = QLabel("")
+            subject_value.setObjectName("subject_value")
+            subject_value.setProperty("class", "value_label")
+            subject_value.setWordWrap(True)
+            subject_row.addWidget(subject_label)
+            subject_row.addWidget(subject_value, 1)  # Give the value label stretch factor of 1
+            header_layout.addLayout(subject_row)
+            self.email_values['subject'] = subject_value
+            
+            # Date field
+            date_row = QHBoxLayout()
+            date_row.setSpacing(5)
+            date_label = QLabel("Date:")
+            date_label.setObjectName("date_label")
+            date_label.setProperty("class", "header_label")
+            date_value = QLabel("")
+            date_value.setObjectName("date_value")
+            date_value.setProperty("class", "value_label")
+            date_value.setStyleSheet("color: #666; font-weight: normal;")
+            date_value.setWordWrap(True)
+            date_row.addWidget(date_label)
+            date_row.addWidget(date_value, 1)  # Give the value label stretch factor of 1
+            header_layout.addLayout(date_row)
+            self.email_values['date'] = date_value
+            
+            # Add a separator
+            separator = QFrame()
+            separator.setFrameShape(QFrame.Shape.HLine)
+            separator.setFrameShadow(QFrame.Shadow.Sunken)
+            separator.setStyleSheet("background-color: #ddd;")
+            header_layout.addWidget(separator)
             
             # Email content
             self.content_view = QTextEdit()
@@ -469,7 +663,11 @@ class EmailWindow(QMainWindow):
             # Apply global styling
             self.setStyleSheet("""
                 QMainWindow {
-                    background-color: #f5f5f5;
+                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                                             stop:0 #e6f2ff, stop:1 #ffffff);
+                }
+                QWidget#central_widget {
+                    background: transparent;
                 }
                 QSplitter::handle {
                     background-color: #ddd;
@@ -477,6 +675,13 @@ class EmailWindow(QMainWindow):
                 }
                 QSplitter::handle:hover {
                     background-color: #ccc;
+                }
+                QListWidget, QTextEdit, QLineEdit {
+                    border-radius: 8px;
+                    border: 1px solid #ddd;
+                }
+                QPushButton {
+                    border-radius: 5px;
                 }
             """)
             
@@ -564,20 +769,32 @@ class EmailWindow(QMainWindow):
         email_data = item.email_data
         
         # Format the date
-        date = QDateTime.fromString(
-            email_data['date'],
-            Qt.DateFormat.TextDate
-        )
-        formatted_date = date.toString('MM/dd/yyyy hh:mm AP')
+        formatted_date = "Date not available"
+        try:
+            if 'date' in email_data and email_data['date']:
+                date_str = email_data['date']
+                date = parse_date(date_str)
+                
+                # Format date consistently
+                if date.isValid():
+                    # Use a consistent format for all dates
+                    formatted_date = date.toString('MM/dd/yyyy hh:mm AP')
+                else:
+                    # Just use the raw date string as fallback
+                    formatted_date = date_str
+            else:
+                print("Date field missing in email data for preview")
+        except Exception as e:
+            print(f"Error formatting date for preview: {str(e)}")
         
         # Set the email details
-        self.email_labels['subject'].setText(email_data['subject'])
-        self.email_labels['from'].setText(email_data['from'])
-        self.email_labels['date'].setText(formatted_date)
+        self.email_values['from'].setText(email_data['from'])
+        self.email_values['subject'].setText(email_data['subject'])
+        self.email_values['date'].setText(formatted_date)
         
         # Set the To field (use recipient from email or default to user's email)
         to_field = email_data.get('to', self.email)
-        self.email_labels['to'].setText(to_field)
+        self.email_values['to'].setText(to_field)
         
         # Set the email content
         self.content_view.setText(email_data['content'])
@@ -597,3 +814,32 @@ class EmailWindow(QMainWindow):
             )
             self.refresh_emails()
         # Removed the error message when dialog is canceled/rejected 
+
+def parse_date(date_str):
+    """Parse date string into QDateTime object using multiple formats"""
+    # Try parsing with Qt.DateFormat.TextDate first
+    date = QDateTime.fromString(date_str, Qt.DateFormat.TextDate)
+    
+    # If that fails, try other formats
+    if not date.isValid():
+        date = QDateTime.fromString(date_str, Qt.DateFormat.ISODate)
+    
+    # If still not valid, try RFC 2822 format
+    if not date.isValid():
+        date = QDateTime.fromString(date_str, Qt.DateFormat.RFC2822Date)
+    
+    # If still not valid, try a custom format for dates with timezone info
+    if not date.isValid() and "(" in date_str:
+        # Remove timezone name in parentheses
+        clean_date = date_str.split("(")[0].strip()
+        date = QDateTime.fromString(clean_date, "ddd, dd MMM yyyy hh:mm:ss")
+    
+    # If still not valid, try a custom format
+    if not date.isValid():
+        date = QDateTime.fromString(date_str, "ddd, dd MMM yyyy hh:mm:ss")
+    
+    # If still not valid, create a default date
+    if not date.isValid():
+        date = QDateTime.currentDateTime()
+        
+    return date 

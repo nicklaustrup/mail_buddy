@@ -2,7 +2,7 @@ import sys
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                            QLabel, QLineEdit, QPushButton, QMessageBox, QCheckBox, QScrollArea)
 from PyQt6.QtCore import Qt, QThread
-from PyQt6.QtGui import QCursor
+from PyQt6.QtGui import QCursor, QIcon
 from dotenv import load_dotenv
 
 from email_handler import EmailHandler
@@ -18,7 +18,9 @@ class LoginWindow(QMainWindow):
         self.worker = None
         self.thread = None
         
-        self.setWindowTitle("Email Client - Login")
+        self.setWindowTitle("Mail Buddy - Login")
+        # Set window icon to bear emoji
+        self.setWindowIcon(QIcon("icon.png"))
         self.setFixedSize(400, 600)  # Adjusted size for the new mascot
         self.setup_ui()
         self.load_saved_credentials()
@@ -29,6 +31,15 @@ class LoginWindow(QMainWindow):
         self.setCentralWidget(central_widget)
         layout = QVBoxLayout(central_widget)
         layout.setSpacing(10)
+        
+        # Set rounded corners and gradient background
+        central_widget.setStyleSheet("""
+            QWidget {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                                          stop:0 #e6f2ff, stop:1 #ffffff);
+                border-radius: 10px;
+            }
+        """)
         
         # Add mascot
         with open('mascot.txt', 'r') as f:
@@ -46,6 +57,7 @@ class LoginWindow(QMainWindow):
                 line-height: 1;
                 letter-spacing: 0px;
                 white-space: pre;
+                background: transparent;
             }
         """)
         
@@ -265,6 +277,26 @@ class LoginWindow(QMainWindow):
 def main():
     load_dotenv()
     app = QApplication(sys.argv)
+    
+    # Set application-wide style
+    app.setStyleSheet("""
+        QMainWindow {
+            background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                                      stop:0 #e6f2ff, stop:1 #ffffff);
+        }
+        QPushButton {
+            border-radius: 5px;
+        }
+        QLineEdit {
+            border-radius: 5px;
+            padding: 5px;
+            border: 1px solid #ccc;
+        }
+        QCheckBox {
+            border-radius: 3px;
+        }
+    """)
+    
     window = LoginWindow()
     window.show()
     sys.exit(app.exec())
