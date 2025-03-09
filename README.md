@@ -39,6 +39,7 @@ Before using the application with Gmail, you need to set up an App Password. Thi
    - You may need to provide a phone number and verify it
 
 3. Create an App Password:
+   - Visit: https://myaccount.google.com/apppasswords
    - Go to Security → App passwords
    - (Note: This option only appears if 2-Step Verification is enabled)
    - Select "App" from the dropdown menu
@@ -48,7 +49,7 @@ Before using the application with Gmail, you need to set up an App Password. Thi
    - Google will display a 16-character password
    - **Copy this password immediately** - you won't be able to see it again
 
-4. Using the App Password:
+5. Using the App Password:
    - When logging into the email client:
      - Use your full Gmail address (e.g., yourname@gmail.com)
      - Use the 16-character App Password instead of your regular Gmail password
