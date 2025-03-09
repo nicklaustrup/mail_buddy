@@ -145,6 +145,9 @@ class EmailWindow(QMainWindow):
         self.setWindowIcon(QIcon("icon.png"))
         self.setMinimumSize(1000, 700)
         
+        # Setup menu bar
+        self.setup_menu()
+        
         # Create central widget and main layout
         print("[EmailWindow.__init__] Creating central widget")
         self.central_widget = QWidget()
@@ -814,6 +817,38 @@ class EmailWindow(QMainWindow):
             )
             self.refresh_emails()
         # Removed the error message when dialog is canceled/rejected 
+
+    def setup_menu(self):
+        # Create menu bar
+        menu_bar = self.menuBar()
+        
+        # Create File menu
+        file_menu = menu_bar.addMenu("File")
+        
+        # Add Logout action
+        logout_action = file_menu.addAction("Logout")
+        logout_action.triggered.connect(self.handle_logout)
+        
+        # Add Exit action
+        exit_action = file_menu.addAction("Exit")
+        exit_action.triggered.connect(self.close)
+        
+        # Create Edit menu
+        edit_menu = menu_bar.addMenu("Edit")
+        
+        # Add Switch Accounts action
+        switch_accounts_action = edit_menu.addAction("Switch Accounts")
+        switch_accounts_action.triggered.connect(self.show_coming_soon)
+    
+    def handle_logout(self):
+        # Close this window and show login window
+        from main import LoginWindow
+        self.login_window = LoginWindow()
+        self.login_window.show()
+        self.close()
+    
+    def show_coming_soon(self):
+        QMessageBox.information(self, "Coming Soon", "This feature is coming soon!")
 
 def parse_date(date_str):
     """Parse date string into QDateTime object using multiple formats"""

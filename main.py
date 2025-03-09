@@ -1,11 +1,12 @@
 import sys
-from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-                           QLabel, QLineEdit, QPushButton, QMessageBox, QCheckBox, QScrollArea)
+from PyQt6.QtWidgets import (
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+    QLabel, QLineEdit, QPushButton, QMessageBox, QCheckBox
+)
 from PyQt6.QtCore import Qt, QThread
 from PyQt6.QtGui import QCursor, QIcon
 from dotenv import load_dotenv
 
-from email_handler import EmailHandler
 from email_window import EmailWindow
 from credentials_manager import CredentialsManager
 from email_worker import EmailWorker
@@ -23,6 +24,7 @@ class LoginWindow(QMainWindow):
         self.setWindowIcon(QIcon("icon.png"))
         self.setFixedSize(400, 600)  # Adjusted size for the new mascot
         self.setup_ui()
+        self.setup_menu()
         self.load_saved_credentials()
     
     def setup_ui(self):
@@ -42,22 +44,33 @@ class LoginWindow(QMainWindow):
         """)
         
         # Add mascot
-        with open('mascot.txt', 'r') as f:
-            mascot_art = f.read()
+        # with open('mascot.txt', 'r') as f:
+        #     mascot_art = f.read()
         
-        mascot_label = QLabel(mascot_art)
+        mascot_label = QLabel("""
+∩_∩
+(^ᴥ^)
+/     \\
+/|  o  |\\
+|_____|
+U   U
+
+MAIL BUDDY
+Your friendly email companion!
+                               """)
         mascot_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         mascot_label.setStyleSheet("""
             QLabel {
-                font-family: monospace;
+                font-family: 'Courier New', monospace;
                 color: #0078d4;
                 margin: 10px;
                 padding: 0px;
-                font-size: 14px;
-                line-height: 1;
+                font-size: 18px;
+                line-height: 1.0;
                 letter-spacing: 0px;
                 white-space: pre;
                 background: transparent;
+                font-weight: bold;
             }
         """)
         
@@ -73,8 +86,11 @@ class LoginWindow(QMainWindow):
         self.password_input = QLineEdit()
         self.password_input.setEchoMode(QLineEdit.EchoMode.Password)
         self.toggle_password_button = QPushButton("Show")
+        self.toggle_password_button.setObjectName("toggle_button")
         self.toggle_password_button.setFixedWidth(60)
-        self.toggle_password_button.clicked.connect(self.toggle_password_visibility)
+        self.toggle_password_button.clicked.connect(
+            self.toggle_password_visibility
+        )
         password_layout.addWidget(self.password_input)
         password_layout.addWidget(self.toggle_password_button)
         
@@ -83,19 +99,18 @@ class LoginWindow(QMainWindow):
         
         # Login button
         self.login_button = QPushButton("Login")
+        self.login_button.setObjectName("login_button")
         self.login_button.setStyleSheet("""
-            QPushButton {
+            QPushButton#login_button {
                 background-color: #0078d4;
                 color: white;
                 border: none;
-                padding: 8px;
-                border-radius: 4px;
                 font-weight: bold;
             }
-            QPushButton:hover {
+            QPushButton#login_button:hover {
                 background-color: #106ebe;
             }
-            QPushButton:disabled {
+            QPushButton#login_button:disabled {
                 background-color: #ccc;
             }
         """)
@@ -137,6 +152,28 @@ class LoginWindow(QMainWindow):
                 font-size: 13px;
             }
         """)
+    
+    def setup_menu(self):
+        # Create menu bar
+        menu_bar = self.menuBar()
+        
+        # Create File menu
+        file_menu = menu_bar.addMenu("File")
+        
+        # Add Logout action
+        logout_action = file_menu.addAction("Logout")
+        logout_action.triggered.connect(self.handle_logout)
+        
+        # Add Exit action
+        exit_action = file_menu.addAction("Exit")
+        exit_action.triggered.connect(self.close)
+        
+        # Create Edit menu
+        edit_menu = menu_bar.addMenu("Edit")
+        
+        # Add Switch Accounts action
+        switch_accounts_action = edit_menu.addAction("Switch Accounts")
+        switch_accounts_action.triggered.connect(self.show_coming_soon)
     
     def load_saved_credentials(self):
         """Load saved credentials if they exist"""
@@ -272,6 +309,16 @@ class LoginWindow(QMainWindow):
             self.worker.deleteLater()
             self.worker = None
         print("[LoginWindow.cleanup_thread] Cleanup complete")
+    
+    def handle_logout(self):
+        # Clear saved credentials and reset fields
+        self.credentials_manager.clear_credentials()
+        self.email_input.clear()
+        self.password_input.clear()
+        self.remember_checkbox.setChecked(False)
+    
+    def show_coming_soon(self):
+        QMessageBox.information(self, "Coming Soon", "This feature is coming soon!")
 
 
 def main():
@@ -286,14 +333,48 @@ def main():
         }
         QPushButton {
             border-radius: 5px;
+            background-color: white;
+            color: #0078d4;
+            border: 1px solid #0078d4;
+            padding: 8px;
+        }
+        QPushButton:hover {
+            background-color: #f0f8ff;
+        }
+        QPushButton#login_button {
+            background-color: #0078d4;
+            color: white;
+            border: none;
+            font-weight: bold;
+        }
+        QPushButton#login_button:hover {
+            background-color: #106ebe;
+        }
+        QPushButton#login_button:disabled {
+            background-color: #ccc;
+        }
+        QPushButton#toggle_button {
+            background-color: white;
+            color: #0078d4;
+            border: 1px solid #ccc;
+            padding: 5px;
+        }
+        QPushButton#toggle_button:hover {
+            background-color: #f0f8ff;
+            border-color: #0078d4;
         }
         QLineEdit {
             border-radius: 5px;
-            padding: 5px;
+            padding: 8px;
             border: 1px solid #ccc;
+            background-color: white;
+        }
+        QLineEdit:focus {
+            border: 1px solid #0078d4;
         }
         QCheckBox {
             border-radius: 3px;
+            background: transparent;
         }
     """)
     
