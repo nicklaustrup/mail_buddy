@@ -10,6 +10,15 @@ A desktop email client application built with Python and PyQt6. This application
 - Modern and clean user interface
 - Password visibility toggle for secure input
 
+## Previews
+   ![image](https://github.com/user-attachments/assets/d3b2612e-9257-4cf0-aae4-76ffb0f14687)
+   
+   ![image](https://github.com/user-attachments/assets/a7b6661f-353a-4bcb-bf51-ff9ff3a26f9d)
+
+   ![image](https://github.com/user-attachments/assets/036bab7d-ca1d-469f-9f6b-f2b1c384e673)
+
+
+
 ## Prerequisites
 
 - Python 3.7 or higher
